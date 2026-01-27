@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../elections/elections_screen.dart';
+import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
-// If you have real screens for these, import them. Otherwise we can keep placeholders or create basic files.
-// Assuming folders exist based on previous ls, but maybe files are empty or don't exist yet.
-// For now I will import ProfileScreen as requested and keep placeholders for others if files aren't ready,
-// BUT the user complains about Profile specifically.
-// Let's assume files might exist or not. 
-// Safest bet: Import ProfileScreen.
-// I will keep placeholders for Elections/Notifications usually, but wait, checking "ls" from step 4
-// "elections" and "notifications" are directories.
-// Let's blindly import them? No, that might break if files don't exist.
-// Let's just fix ProfileScreen for now as requested.
+import 'package:firebase_auth/firebase_auth.dart';
+import '../login/login_screen.dart'; // For logout redirection if needed (though StreamBuilder handles usually)
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -22,17 +16,31 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
-    DashboardScreen(),
-    ElectionsScreen(),
-    NotificationsScreen(),
-    ProfileScreen(), // This now refers to the imported one
-  ];
-
+  // We need to initialize screens in build or similar if we want to pass callbacks that rely on setState
+  
   @override
   Widget build(BuildContext context) {
+    // List of screens
+    // We recreate them to pass latest state if needed, or stick to const if possible.
+    // Dashboard needs callback.
+    final List<Widget> screens = [
+      DashboardScreen(
+        onSwitchToElections: () {
+          setState(() {
+            _currentIndex = 1; // Switch to Elections tab
+          });
+        },
+      ),
+      const ElectionsScreen(),
+      const NotificationsScreen(),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex, // Preserves state of tabs
+        children: screens,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         type: BottomNavigationBarType.fixed,
@@ -66,38 +74,5 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-/* ---------- Placeholder Screens ---------- */
-
-class ElectionsScreen extends StatelessWidget {
-  const ElectionsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text(
-          'Elections Screen',
-          style: TextStyle(fontSize: 22),
-        ),
-      ),
-    );
-  }
-}
-
-class NotificationsScreen extends StatelessWidget {
-  const NotificationsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text(
-          'Notifications Screen',
-          style: TextStyle(fontSize: 22),
-        ),
-      ),
-    );
-  }
-}
-
-// REMOVED Placeholder ProfileScreen so the imported one is used.
+// Wrapper to handle Auth State (Login vs Main) is likely in main.dart root, 
+// so this file just handles the authenticated view.

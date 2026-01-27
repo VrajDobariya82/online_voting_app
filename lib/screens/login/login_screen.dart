@@ -25,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // ---------------- EMAIL LOGIN ----------------
+  
   Future<void> loginWithEmail() async {
     if (!_formKey.currentState!.validate()) return;
     
@@ -36,15 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
         password: passwordController.text.trim(),
       );
       if (!mounted) return;
-      // Navigator handled by StreamBuilder but we can pushReplacement to be safe or if StreamBuilder is not wrapping the whole app
-      // Since main.dart uses StreamBuilder, just popping or doing nothing might trigger rebuild, 
-      // but explicitly going to main is fine or just letting the stream update the UI.
-      // However, usually LoginScreen is shown when stream is waiting or null. 
-      // If we are in LoginScreen, usually we are not in the 'auth' state.
-      // Let's just catch errors here. The navigation relies on the stream in main.dart or we can pushReplacement.
-      // But typically with StreamBuilder in main, the auth state change will rebuild main.
-      // We will leave navigation here just in case.
-      // logic in main.dart: if logged in -> MainScreen.
+
       
     } on FirebaseAuthException catch (e) {
       _showError(e.message ?? 'Login failed');

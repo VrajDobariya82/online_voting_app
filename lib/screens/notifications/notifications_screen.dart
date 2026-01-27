@@ -5,50 +5,72 @@ class NotificationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dummy Data
+    final notifications = [
+      {
+        "title": "Election Started!",
+        "msg": "Voting for President has begun. Cast your vote now.",
+        "time": "1 hour ago",
+        "isRead": false,
+      },
+      {
+        "title": "Reminder: Voter Verification",
+        "msg": "Please verify your voter ID at the admin office.",
+        "time": "Yesterday",
+        "isRead": true,
+      },
+      {
+        "title": "Results Announced: Sports Sec",
+        "msg": "Rahul M has been elected as the new Sports Secretary.",
+        "time": "2 days ago",
+        "isRead": true,
+      },
+    ];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
-        centerTitle: true,
+        title: const Text("Notifications"),
+        automaticallyImplyLeading: false, 
       ),
-      body: ListView(
+      body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        children: const [
-          NotificationTile(
-            title: 'Vote Submitted Successfully',
-            time: '2 minutes ago',
-          ),
-          NotificationTile(
-            title: 'New Election Announced',
-            time: '1 day ago',
-          ),
-          NotificationTile(
-            title: 'Election Results Published',
-            time: '3 days ago',
-          ),
-        ],
-      ),
-    );
-  }
-}
+        itemCount: notifications.length,
+        itemBuilder: (context, index) {
+          final notif = notifications[index];
+          final bool isRead = notif['isRead'] as bool;
 
-class NotificationTile extends StatelessWidget {
-  final String title;
-  final String time;
-
-  const NotificationTile({
-    super.key,
-    required this.title,
-    required this.time,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: const Icon(Icons.notifications),
-        title: Text(title),
-        subtitle: Text(time),
+          return Card(
+            color: isRead ? Colors.white : const Color(0xFFE8F5E9), // Light green for unread
+            elevation: isRead ? 1 : 2,
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              leading: Icon(
+                Icons.notifications,
+                color: isRead ? Colors.grey : const Color(0xFF00C853),
+              ),
+              title: Text(
+                notif['title'] as String,
+                style: TextStyle(
+                  fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(notif['msg'] as String),
+                    const SizedBox(height: 6),
+                    Text(
+                      notif['time'] as String,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
