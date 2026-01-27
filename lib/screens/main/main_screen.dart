@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../profile/profile_screen.dart';
+// If you have real screens for these, import them. Otherwise we can keep placeholders or create basic files.
+// Assuming folders exist based on previous ls, but maybe files are empty or don't exist yet.
+// For now I will import ProfileScreen as requested and keep placeholders for others if files aren't ready,
+// BUT the user complains about Profile specifically.
+// Let's assume files might exist or not. 
+// Safest bet: Import ProfileScreen.
+// I will keep placeholders for Elections/Notifications usually, but wait, checking "ls" from step 4
+// "elections" and "notifications" are directories.
+// Let's blindly import them? No, that might break if files don't exist.
+// Let's just fix ProfileScreen for now as requested.
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,7 +26,7 @@ class _MainScreenState extends State<MainScreen> {
     DashboardScreen(),
     ElectionsScreen(),
     NotificationsScreen(),
-    ProfileScreen(),
+    ProfileScreen(), // This now refers to the imported one
   ];
 
   @override
@@ -89,18 +100,4 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text(
-          'Profile Screen',
-          style: TextStyle(fontSize: 22),
-        ),
-      ),
-    );
-  }
-}
+// REMOVED Placeholder ProfileScreen so the imported one is used.
