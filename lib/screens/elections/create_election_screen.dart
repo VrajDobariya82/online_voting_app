@@ -32,7 +32,11 @@ class _CreateElectionScreenState extends State<CreateElectionScreen> {
     );
     if (picked != null) {
       setState(() {
-        if (isStart) startDate = picked; else endDate = picked;
+        if (isStart) {
+          startDate = picked;
+        } else {
+          endDate = picked;
+        }
       });
     }
   }
@@ -44,7 +48,11 @@ class _CreateElectionScreenState extends State<CreateElectionScreen> {
     );
     if (picked != null) {
       setState(() {
-        if (isStart) startTime = picked; else endTime = picked;
+        if (isStart) {
+          startTime = picked;
+        } else {
+          endTime = picked;
+        }
       });
     }
   }
@@ -331,7 +339,7 @@ class _AddOptionsScreenState extends State<AddOptionsScreen> {
                   ),
                 ),
               );
-            }).toList(),
+            }),
 
             // Add Option Button
             OutlinedButton.icon(

@@ -3,8 +3,7 @@ import '../dashboard/dashboard_screen.dart';
 import '../elections/elections_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../login/login_screen.dart'; // For logout redirection if needed (though StreamBuilder handles usually)
+// For logout redirection if needed (though StreamBuilder handles usually)
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
