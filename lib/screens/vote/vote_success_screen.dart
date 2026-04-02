@@ -3,7 +3,13 @@ import 'package:intl/intl.dart';
 
 class VoteSuccessScreen extends StatelessWidget {
   final String electionTitle;
-  const VoteSuccessScreen({super.key, required this.electionTitle});
+  final String? candidateName;
+
+  const VoteSuccessScreen({
+    super.key,
+    required this.electionTitle,
+    this.candidateName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +52,24 @@ class VoteSuccessScreen extends StatelessWidget {
                       fontSize: 18,
                     ),
                   ),
+                  if (candidateName != null && candidateName!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.how_to_vote, size: 16, color: Color(0xFF00C853)),
+                        const SizedBox(width: 6),
+                        Text(
+                          "Voted for: $candidateName",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: Color(0xFF00C853),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Text(
                     "Time: ${DateFormat('MMM d, y • h:mm a').format(DateTime.now())}",
@@ -62,7 +86,6 @@ class VoteSuccessScreen extends StatelessWidget {
             const SizedBox(height: 40),
             ElevatedButton(
               onPressed: () {
-                // Pop until we hit the first route (likely MainScreen)
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
               child: const Text("Back to Home"),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -42,38 +42,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => isLoading = true);
 
-    try {
-      // 1. Create Auth User
-      UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
+    final authProvider = context.read<AppAuthProvider>();
+    final error = await authProvider.register(
+      name: nameController.text.trim(),
+      email: emailController.text.trim(),
+      phone: phoneController.text.trim(),
+      voterId: voterIdController.text.trim(),
+      password: passwordController.text.trim(),
+    );
 
-      // 2. Update Display Name
-      await userCredential.user?.updateDisplayName(nameController.text.trim());
-      
-      // 3. Save additional data to Firestore
-      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-        'name': nameController.text.trim(),
-        'email': emailController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'voterId': voterIdController.text.trim(),
-        'isVerified': false, // Default to false
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+    if (!mounted) return;
 
-      if (!mounted) return;
-      
+    if (error != null) {
+      _showError(error);
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Registration Successful! Logging in...')),
       );
-      
-      Navigator.pop(context); 
-    } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? 'Registration failed');
-    } catch (e) {
-      _showError('Error: $e');
+      Navigator.pop(context);
     }
 
     setState(() => isLoading = false);
@@ -185,7 +171,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         keyboardType: TextInputType.phone,
                         validator: (value) {
                            if (value == null || value.isEmpty) return 'Enter Phone Number';
-                           // Simple check for digits and length
                            if (value.length < 10) return 'Enter valid phone number (min 10 digits)';
                            return null;
                         },
@@ -235,8 +220,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 24),
         
                       ElevatedButton(
-                        onPressed: registerUser,
-                        child: const Text('Register'),
+                        onPressed: isLoading ? null : registerUser,
+                        child: isLoading
+                            ? const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text('Register'),
                       ),
         
                       const SizedBox(height: 16),
@@ -259,12 +250,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ],
                       ),
-        
-                      if (isLoading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
-                          child: CircularProgressIndicator(),
-                        ),
                     ],
                   ),
                 ),

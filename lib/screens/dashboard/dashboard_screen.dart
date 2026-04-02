@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../providers/auth_provider.dart';
 import '../elections/create_election_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -10,7 +11,7 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final authProvider = context.watch<AppAuthProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
@@ -20,69 +21,48 @@ class DashboardScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Welcome Header
-              StreamBuilder<DocumentSnapshot>(
-                stream: user != null 
-                  ? FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots()
-                  : null,
-                builder: (context, snapshot) {
-                  final data = snapshot.data?.data() as Map<String, dynamic>?;
-                  final name = data?['name'] ?? user?.displayName ?? 'Voter';
-                  final voterId = data?['voterId'] ?? 'Loading...';
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Welcome, $name",
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2D3436),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                         decoration: BoxDecoration(
-                           color: Colors.white,
-                           borderRadius: BorderRadius.circular(20),
-                           border: Border.all(color: Colors.grey.shade300),
-                         ),
-                         child: Text(
-                           "Voter ID: $voterId",
-                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                         )
-                      ),
-                    ],
-                  );
-                },
+              // Welcome Header — now uses AppAuthProvider
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Welcome, ${authProvider.displayName}",
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2D3436),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                     decoration: BoxDecoration(
+                       color: Colors.white,
+                       borderRadius: BorderRadius.circular(20),
+                       border: Border.all(color: Colors.grey.shade300),
+                     ),
+                     child: Text(
+                       "Voter ID: ${authProvider.voterId}",
+                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                     )
+                  ),
+                ],
               ),
               
               const SizedBox(height: 30),
-
-              // Header
-              // ... Header Code is fine ...
 
               // Real-time Election Stats
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('elections').snapshots(),
                 builder: (context, snapshot) {
                    int activeCount = 0;
-                   Map<String, dynamic>? nextElection;
                    DateTime? nextDate;
-                   
-                   // Voting Status (Checking if user voted in *Active* elections is expensive here without complex queries)
-                   // Simplified: Just show "Check Elections" or keep dummy "Not Voted" until we query specific election.
-                   // Or query 'votes' collectionGroup (requires index) or just check local logic.
-                   // For now, let's just show Active Count and Next Election accurately.
                    
                    if (snapshot.hasData) {
                      final now = DateTime.now();
                      for (var doc in snapshot.data!.docs) {
                        final data = doc.data() as Map<String, dynamic>;
                        
-                       // Defensive Parsing
                        if (data['startTime'] == null || data['endTime'] == null) continue;
                        Timestamp? startTs = data['startTime'] as Timestamp?;
                        Timestamp? endTs = data['endTime'] as Timestamp?;
@@ -100,7 +80,6 @@ class DashboardScreen extends StatelessWidget {
                        if (now.isBefore(start)) {
                          if (nextDate == null || start.isBefore(nextDate)) {
                            nextDate = start;
-                           nextElection = data;
                          }
                        }
                      }
@@ -132,12 +111,22 @@ class DashboardScreen extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _buildSummaryCard(
-                          label: "Voting Status",
-                          value: "Tap to Check", 
-                          icon: Icons.check_circle_outline,
-                          color: Colors.blueAccent,
-                          isFullWidth: true,
+                        // Voting Status — tapping navigates to Elections tab
+                        GestureDetector(
+                          onTap: () {
+                            if (onSwitchToElections != null) {
+                              onSwitchToElections!();
+                            }
+                          },
+                          child: _buildSummaryCard(
+                            label: "Voting Status",
+                            value: activeCount > 0
+                                ? "$activeCount Active — Tap to Vote"
+                                : "No Active Elections",
+                            icon: Icons.check_circle_outline,
+                            color: Colors.blueAccent,
+                            isFullWidth: true,
+                          ),
                         ),
                      ],
                    );
@@ -152,7 +141,6 @@ class DashboardScreen extends StatelessWidget {
                   if (onSwitchToElections != null) {
                     onSwitchToElections!();
                   } else {
-                     // Fallback if not passed (though MainScreen will pass it)
                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Use bottom nav to view elections")));
                   }
                 },
@@ -168,7 +156,6 @@ class DashboardScreen extends StatelessWidget {
               // Create Election Button
               ElevatedButton.icon(
                 onPressed: () {
-                    // Navigate to Create Election Flow
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const CreateElectionScreen()),
@@ -192,16 +179,16 @@ class DashboardScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                   boxShadow: [
-                    BoxShadow(color: Colors.blue.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+                    BoxShadow(color: Colors.blue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
                   ]
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    const Icon(Icons.info_outline, color: Colors.blue),
-                    const SizedBox(width: 16),
-                    const Expanded(
+                    Icon(Icons.info_outline, color: Colors.blue),
+                    SizedBox(width: 16),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -241,7 +228,7 @@ class DashboardScreen extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: Icon(icon, color: color, size: 20),
               ),
               if (isFullWidth) ...[

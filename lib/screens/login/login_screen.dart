@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -30,17 +31,20 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() => isLoading = true);
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
-      if (!mounted) return;
+    
+    final authProvider = context.read<AppAuthProvider>();
+    final error = await authProvider.signIn(
+      emailController.text.trim(),
+      passwordController.text.trim(),
+    );
 
-      
-    } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? 'Login failed');
+    if (!mounted) return;
+
+    if (error != null) {
+      _showError(error);
     }
+    // On success, SplashWrapper in main.dart auto-redirects to MainScreen
+    
     setState(() => isLoading = false);
   }
 
@@ -145,12 +149,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 24),
   
                       ElevatedButton(
-                        onPressed: loginWithEmail,
-                        child: const Text('Login'),
+                        onPressed: isLoading ? null : loginWithEmail,
+                        child: isLoading
+                            ? const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text('Login'),
                       ),
                       
                       
-  
+
                       const SizedBox(height: 24),
                       
                       // Register Link
@@ -172,12 +182,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
-                      
-                      if (isLoading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
-                          child: CircularProgressIndicator(),
-                        ),
                     ],
                   ),
                 ),
@@ -189,5 +193,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
-

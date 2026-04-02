@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../providers/election_provider.dart';
 import '../vote/candidate_list_screen.dart';
 
 class ElectionsScreen extends StatelessWidget {
@@ -23,16 +25,14 @@ class ElectionsScreen extends StatelessWidget {
            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
            final today = DateTime.now();
-           final elections = snapshot.data!.docs.map((doc) => doc.data() as Map<String, dynamic>..['id'] = doc.id).toList();
+           final elections = snapshot.data!.docs.map((doc) => {...(doc.data() as Map<String, dynamic>), 'id': doc.id}).toList();
 
            // Group by status
-           // Note: Status field might be manual or calculated. Let's calculate based on time.
            final ongoing = <Map<String, dynamic>>[];
            final upcoming = <Map<String, dynamic>>[];
            final completed = <Map<String, dynamic>>[];
 
            for (var e in elections) {
-             // Defensive Parsing
              if (e['startTime'] == null || e['endTime'] == null) continue;
              
              Timestamp? startTs = e['startTime'] as Timestamp?;
@@ -126,6 +126,19 @@ class ElectionsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (election['imageUrl'] != null && election['imageUrl'].toString().isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    election['imageUrl'],
+                    width: double.infinity,
+                    height: 140,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                  ),
+                ),
+              if (election['imageUrl'] != null && election['imageUrl'].toString().isNotEmpty)
+                const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -139,29 +152,13 @@ class ElectionsScreen extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
                       onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text("Delete Election?"),
-                            content: const Text("This action cannot be undone."),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  FirebaseFirestore.instance.collection('elections').doc(election['id']).delete();
-                                },
-                                child: const Text("Delete", style: TextStyle(color: Colors.red)),
-                              ),
-                            ],
-                          ),
-                        );
+                        _confirmDelete(context, election['id']);
                       },
                     ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: statusColor),
                     ),
@@ -195,6 +192,38 @@ class ElectionsScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext parentContext, String electionId) {
+    // Grab provider reference from the parent (screen) context BEFORE showing dialog
+    final electionProvider = parentContext.read<ElectionProvider>();
+
+    showDialog(
+      context: parentContext,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Delete Election?"),
+        content: const Text("This will delete the election, all candidates, and all votes. This cannot be undone."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext); // close dialog first
+              try {
+                await electionProvider.deleteElection(electionId);
+                if (parentContext.mounted) {
+                  ScaffoldMessenger.of(parentContext).showSnackBar(const SnackBar(content: Text("Election deleted.")));
+                }
+              } catch (e) {
+                if (parentContext.mounted) {
+                  ScaffoldMessenger.of(parentContext).showSnackBar(SnackBar(content: Text("Error: $e")));
+                }
+              }
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
+
+import 'providers/auth_provider.dart';
+import 'providers/election_provider.dart';
 
 import 'screens/login/login_screen.dart';
 import 'screens/main/main_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/register/register_screen.dart';
+import 'screens/notifications/notifications_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await NotificationService().init();
   runApp(const SmartVoteApp());
 }
 
@@ -21,60 +28,68 @@ class SmartVoteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'SmartVote',
-      theme: ThemeData(
-        fontFamily: 'Poppins', // Assuming text style, falls back to default if not added to pubspec
-        scaffoldBackgroundColor: const Color(0xFFF1F8F5), // Light Mint
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF00C853), // Emerald Green
-          primary: const Color(0xFF00C853),
-        ),
-        useMaterial3: true,
-        
-        // Input Theme (Filled, Rounded, No Border)
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFFF5F6FA), // Light Grey/White-ish
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppAuthProvider()),
+        ChangeNotifierProvider(create: (_) => ElectionProvider()),
+      ],
+      child: MaterialApp(
+        navigatorKey: NotificationService.navigatorKey,
+        debugShowCheckedModeBanner: false,
+        title: 'SmartVote',
+        theme: ThemeData(
+          fontFamily: 'Poppins',
+          scaffoldBackgroundColor: const Color(0xFFF1F8F5),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF00C853),
+            primary: const Color(0xFF00C853),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF00C853), width: 1),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          hintStyle: const TextStyle(color: Colors.grey),
-        ),
-
-        // Elevated Button Theme (Full width, Green, Rounded)
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF00C853),
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(
+          useMaterial3: true,
+          
+          // Input Theme (Filled, Rounded, No Border)
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: const Color(0xFFF5F6FA),
+            border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
             ),
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF00C853), width: 1),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            hintStyle: const TextStyle(color: Colors.grey),
+          ),
+
+          // Elevated Button Theme (Full width, Green, Rounded)
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C853),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
+        home: const SplashWrapper(),
+        routes: {
+          '/login': (context) => const LoginScreen(),
+          '/register': (context) => const RegisterScreen(),
+          '/main': (context) => const MainScreen(),
+          '/notifications': (context) => const NotificationsScreen(),
+        },
       ),
-      home: const SplashWrapper(),
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegisterScreen(),
-        '/main': (context) => const MainScreen(),
-      },
     );
   }
 }

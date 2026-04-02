@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
+import '../../providers/election_provider.dart';
 import 'vote_success_screen.dart';
 
 class CandidateListScreen extends StatelessWidget {
@@ -16,6 +18,11 @@ class CandidateListScreen extends StatelessWidget {
     this.isVotingActive = true,
     this.isCreator = false,
   });
+
+  final List<Color> _chartColors = const [
+    Colors.blue, Colors.red, Colors.orange, Colors.green, Colors.purple, 
+    Colors.teal, Colors.amber, Colors.pink, Colors.cyan, Colors.indigo
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -39,13 +46,11 @@ class CandidateListScreen extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-             print("Error loading candidates: ${snapshot.error}");
              return Center(child: Text("Error: ${snapshot.error}"));
           }
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           
           final candidates = snapshot.data!.docs;
-          print("Loaded ${candidates.length} candidates for election $electionId");
 
           if (candidates.isEmpty) {
              return Center(
@@ -69,12 +74,17 @@ class CandidateListScreen extends StatelessWidget {
              );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: candidates.length,
-            itemBuilder: (context, index) {
+          return Column(
+            children: [
+              if (!isVotingActive) _buildPieChart(candidates),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: candidates.length,
+                  itemBuilder: (context, index) {
               final cand = candidates[index].data() as Map<String, dynamic>;
               final candId = candidates[index].id;
+              final Color itemColor = isVotingActive ? Theme.of(context).primaryColor : _chartColors[index % _chartColors.length];
               
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -91,10 +101,10 @@ class CandidateListScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).primaryColor.withOpacity(0.1),
+                            color: itemColor.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.check_circle_outline, color: Theme.of(context).primaryColor),
+                          child: Icon(Icons.check_circle_outline, color: itemColor),
                         ),
                         const SizedBox(width: 16),
                         
@@ -127,38 +137,106 @@ class CandidateListScreen extends StatelessWidget {
                         if (isVotingActive)
                           const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey)
                         else
-                          const Text("Disabled", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                          // Show vote count for non-active (completed) elections
+                          Column(
+                            children: [
+                              Text(
+                                "${cand['voteCount'] ?? 0}",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Color(0xFF00C853),
+                                ),
+                              ),
+                              const Text("votes", style: TextStyle(color: Colors.grey, fontSize: 11)),
+                            ],
+                          ),
                       ],
                     ),
                   ),
                 ),
               );
             },
+          ),
+              ),
+            ],
           );
         },
       ),
     );
   }
 
-  void _confirmDelete(BuildContext context) {
+  Widget _buildPieChart(List<QueryDocumentSnapshot> candidates) {
+    int totalVotes = 0;
+    for (var doc in candidates) {
+      final cand = doc.data() as Map<String, dynamic>;
+      totalVotes += (cand['voteCount'] as int?) ?? 0;
+    }
+
+    if (totalVotes == 0) {
+      return const Padding(
+        padding: EdgeInsets.all(24.0),
+        child: Text("No votes recorded yet.", style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    return Container(
+      height: 220,
+      padding: const EdgeInsets.only(top: 24, bottom: 8),
+      child: PieChart(
+        PieChartData(
+          sectionsSpace: 2,
+          centerSpaceRadius: 40,
+          sections: candidates.asMap().entries.map((entry) {
+            final cand = entry.value.data() as Map<String, dynamic>;
+            final votes = (cand['voteCount'] as int?) ?? 0;
+            final percentage = (votes / totalVotes) * 100;
+            
+            return PieChartSectionData(
+              value: votes.toDouble(),
+              title: '${percentage.toStringAsFixed(1)}%',
+              color: _chartColors[entry.key % _chartColors.length],
+              radius: 50,
+              titleStyle: const TextStyle(
+                fontSize: 12, 
+                fontWeight: FontWeight.bold, 
+                color: Colors.white,
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext parentContext) {
+    // Grab provider before showing dialog to avoid stale context
+    final electionProvider = parentContext.read<ElectionProvider>();
+
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: parentContext,
+      builder: (dialogCtx) => AlertDialog(
         title: const Text("Delete Election?"),
-        content: const Text("Are you sure? This will delete the election and all votes. This cannot be undone."),
+        content: const Text("Are you sure? This will delete the election, all candidates, and all votes. This cannot be undone."),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              Navigator.pop(context); // close dialog
-              await FirebaseFirestore.instance.collection('elections').doc(electionId).delete();
-              if (context.mounted) {
-                 Navigator.pop(context); // go back to list
-                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Election deleted.")));
+              Navigator.pop(dialogCtx); // close dialog
+              try {
+                await electionProvider.deleteElection(electionId);
+                if (parentContext.mounted) {
+                  Navigator.pop(parentContext); // go back to list
+                  ScaffoldMessenger.of(parentContext).showSnackBar(const SnackBar(content: Text("Election deleted.")));
+                }
+              } catch (e) {
+                if (parentContext.mounted) {
+                  ScaffoldMessenger.of(parentContext).showSnackBar(SnackBar(content: Text("Error: $e")));
+                }
               }
             },
             child: const Text("Delete", style: TextStyle(color: Colors.white)),
@@ -182,7 +260,7 @@ class CandidateListScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(dialogContext); // Close dialog
-              _submitVote(parentContext, candidateId); // Use STABLE parent context
+              _submitVote(parentContext, candidateId, candidateName);
             },
             child: const Text("Confirm"),
           ),
@@ -191,70 +269,43 @@ class CandidateListScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _submitVote(BuildContext context, String candidateId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  Future<void> _submitVote(BuildContext context, String candidateId, String candidateName) async {
+    final electionProvider = context.read<ElectionProvider>();
 
-    print("Submitting vote for candidate $candidateId..."); // Debug
+    final result = await electionProvider.castVote(
+      electionId: electionId,
+      candidateId: candidateId,
+    );
 
-    try {
-       final electionRef = FirebaseFirestore.instance.collection('elections').doc(electionId);
-       
-       // Check if already voted
-       final voteDoc = await electionRef.collection('votes').doc(user.uid).get();
-       if (voteDoc.exists) {
-         print("User already voted. Redirecting to receipt..."); // Debug
-         if (!context.mounted) return;
-         
-         // Show a quick message
-         ScaffoldMessenger.of(context).showSnackBar(
-           const SnackBar(content: Text("You have already voted! Showing receipt...")),
-         );
-         
-         // Navigate to Success Screen to show receipt
-         Navigator.pushReplacement(
-           context,
-           MaterialPageRoute(
-             builder: (_) => VoteSuccessScreen(electionTitle: electionTitle),
-           ),
-         );
-         return;
-       }
+    if (!context.mounted) return;
 
-       print("Starting transaction..."); // Debug
-
-       // Transaction to increment count
-       await FirebaseFirestore.instance.runTransaction((transaction) async {
-          // 1. Record Vote
-          transaction.set(electionRef.collection('votes').doc(user.uid), {
-             'votedAt': FieldValue.serverTimestamp(),
-             'candidateId': candidateId,
-          });
-
-          // 2. Increment Candidate Count
-          final candRef = electionRef.collection('candidates').doc(candidateId);
-          transaction.update(candRef, {
-            'voteCount': FieldValue.increment(1),
-          });
-       });
-       
-       print("Transaction success! Navigating..."); // Debug
-       
-       if (!context.mounted) {
-         print("Context not mounted, cannot navigate."); // Debug
-         return;
-       }
-       
-       Navigator.pushReplacement(
-         context,
-         MaterialPageRoute(
-           builder: (_) => VoteSuccessScreen(electionTitle: electionTitle),
-         ),
-       );
-
-    } catch (e) {
-      print("Transaction failed: $e"); // Debug
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error voting: $e")));
+    if (result == 'already_voted') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You have already voted! Showing receipt...")),
+      );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VoteSuccessScreen(
+            electionTitle: electionTitle,
+            candidateName: candidateName,
+          ),
+        ),
+      );
+    } else if (result != null) {
+      // Error
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
+    } else {
+      // Success
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VoteSuccessScreen(
+            electionTitle: electionTitle,
+            candidateName: candidateName,
+          ),
+        ),
+      );
     }
   }
 }

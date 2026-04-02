@@ -1,63 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
 import '../settings/settings_screen.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  final User? user = FirebaseAuth.instance.currentUser;
-
-  // Refresh user data (if needed manually, but StreamBuilder handles Firestore updates)
-  // EditProfileScreen might update Auth display name, but Firestore needs separate update if we want consistency.
-  // For now, we just rely on Firestore stream for the UI.
-
-  @override
   Widget build(BuildContext context) {
-    if (user == null) return const Center(child: Text("Not Logged In"));
+    return Consumer<AppAuthProvider>(
+      builder: (context, authProvider, _) {
+        if (!authProvider.isLoggedIn) {
+          return const Center(child: Text("Not Logged In"));
+        }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA), // Light background
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          "Profile",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        automaticallyImplyLeading: false, 
-      ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(user!.uid).snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-             return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-             return Center(child: Text("Error: ${snapshot.error}"));
-          }
+        final String displayName = authProvider.displayName;
+        final String voterId = authProvider.voterId;
+        final String email = authProvider.email;
+        final String phone = authProvider.phone;
+        final bool isVerified = authProvider.isVerified;
 
-          // Data from Firestore
-          final data = snapshot.data?.data() as Map<String, dynamic>?;
-
-          // Fallbacks usually from Auth if Firestore is empty (e.g. old users)
-          final String displayName = data?['name'] ?? user!.displayName ?? 'Voter';
-          final String voterId = data?['voterId'] ?? 'Not Set';
-          final String email = data?['email'] ?? user!.email ?? '-';
-          final String phone = data?['phone'] ?? '-';
-          final bool isVerified = data?['isVerified'] ?? false;
-          
-          // Department and Year are removed as they are not collected yet.
-          // If the user adds them to Firestore later, we can show them.
-          
-          return SingleChildScrollView(
+        return Scaffold(
+          backgroundColor: const Color(0xFFF5F6FA),
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: const Text(
+              "Profile",
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            ),
+            centerTitle: true,
+            automaticallyImplyLeading: false, 
+          ),
+          body: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
@@ -121,19 +97,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       
                       // Edit Profile Button
                       OutlinedButton.icon(
-                        onPressed: () async {
-                          // Pass current name to edit screen
-                          // (Assuming EditScreen updates Auth name, it should also update Firestore if we want consistency)
-                          // We will just let it update Auth for now. 
-                          // Or better: update EditScreen to update Firestore too.
-                          await Navigator.push(
+                        onPressed: () {
+                          Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => const EditProfileScreen()),
                           );
-                          // Stream will auto-update if Firestore changed. 
-                          // If only Auth changed, 'displayName' var (if fallback used) might not update unless we setState.
-                          // But we prefer Firestore data 'name'.
-                          setState(() {}); 
                         },
                         icon: const Icon(Icons.edit_outlined, size: 18),
                         label: const Text("Edit Profile"),
@@ -181,7 +149,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       
                       _buildDetailRow("Email", email),
                       const Divider(height: 30),
-                      _buildDetailRow("Phone", phone), // Added Phone instead of Dept
+                      _buildDetailRow("Phone", phone.isNotEmpty ? phone : '-'),
                       const Divider(height: 30),
                       
                       // Verified Row
@@ -235,17 +203,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: "Logout",
                   isDestructive: true,
                   onTap: () async {
-                    await FirebaseAuth.instance.signOut();
-                    // MainScreen StreamBuilder handles nav
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Logout"),
+                        content: const Text("Are you sure you want to logout?"),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text("Cancel"),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text("Logout", style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true && context.mounted) {
+                      await context.read<AppAuthProvider>().signOut();
+                    }
                   },
                 ),
                 
                 const SizedBox(height: 30),
               ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 

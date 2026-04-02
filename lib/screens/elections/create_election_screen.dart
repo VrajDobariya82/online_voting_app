@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../../providers/election_provider.dart';
+import '../../services/notification_service.dart';
 
 class CreateElectionScreen extends StatefulWidget {
   const CreateElectionScreen({super.key});
@@ -14,6 +15,7 @@ class _CreateElectionScreenState extends State<CreateElectionScreen> {
   
   final titleController = TextEditingController();
   final descController = TextEditingController();
+  final imageUrlController = TextEditingController();
   
   DateTime? startDate;
   TimeOfDay? startTime;
@@ -22,6 +24,14 @@ class _CreateElectionScreenState extends State<CreateElectionScreen> {
   TimeOfDay? endTime;
   
   bool isPrivate = false;
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    descController.dispose();
+    imageUrlController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickDate(bool isStart) async {
     final picked = await showDatePicker(
@@ -80,6 +90,7 @@ class _CreateElectionScreenState extends State<CreateElectionScreen> {
         builder: (_) => AddOptionsScreen(
           title: titleController.text.trim(),
           description: descController.text.trim(),
+          imageUrl: imageUrlController.text.trim(),
           start: start,
           end: end,
           isPrivate: isPrivate,
@@ -109,6 +120,14 @@ class _CreateElectionScreenState extends State<CreateElectionScreen> {
                 controller: descController,
                 maxLines: 3,
                 decoration: const InputDecoration(labelText: "Description"),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: imageUrlController,
+                decoration: const InputDecoration(
+                  labelText: "Banner Image URL (Optional)",
+                  hintText: "https://example.com/image.jpg",
+                ),
               ),
               const SizedBox(height: 24),
               
@@ -166,13 +185,12 @@ class _CreateElectionScreenState extends State<CreateElectionScreen> {
   }
 }
 
-// ---------------- ADD CANDIDATES SCREEN ----------------
-
 // ---------------- ADD OPTIONS SCREEN ----------------
 
 class AddOptionsScreen extends StatefulWidget {
   final String title;
   final String description;
+  final String? imageUrl;
   final DateTime start;
   final DateTime end;
   final bool isPrivate;
@@ -181,6 +199,7 @@ class AddOptionsScreen extends StatefulWidget {
     super.key,
     required this.title,
     required this.description,
+    this.imageUrl,
     required this.start,
     required this.end,
     required this.isPrivate,
@@ -191,7 +210,6 @@ class AddOptionsScreen extends StatefulWidget {
 }
 
 class _AddOptionsScreenState extends State<AddOptionsScreen> {
-  // List of Map to store option forms locally
   List<Map<String, TextEditingController>> options = [];
   bool allowOther = false;
   bool isLoading = false;
@@ -201,6 +219,15 @@ class _AddOptionsScreenState extends State<AddOptionsScreen> {
     super.initState();
     _addOptionForm(); // Start with one
     _addOptionForm(); // Start with two (min required)
+  }
+
+  @override
+  void dispose() {
+    for (var option in options) {
+      option['title']?.dispose();
+      option['desc']?.dispose();
+    }
+    super.dispose();
   }
 
   void _addOptionForm() {
@@ -218,12 +245,14 @@ class _AddOptionsScreenState extends State<AddOptionsScreen> {
 
   void _removeOptionForm(int index) {
       setState(() {
+        options[index]['title']?.dispose();
+        options[index]['desc']?.dispose();
         options.removeAt(index);
       });
   }
 
   Future<void> _publishElection() async {
-    // 1. Validation Logic
+    // Validation
     if (options.length < 2) {
        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Minimum 2 options required")));
        return;
@@ -236,58 +265,48 @@ class _AddOptionsScreenState extends State<AddOptionsScreen> {
       }
     }
 
-    print("Starting election publish..."); // Debug
     setState(() => isLoading = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw "Not logged in";
+      final electionProvider = context.read<ElectionProvider>();
       
-      print("User: ${user.uid}"); // Debug
+      final optionsList = options.map((o) {
+        return <String, String>{
+          'title': o['title']!.text.trim(),
+          'desc': o['desc']!.text.trim(),
+        };
+      }).toList();
 
-      // 2. Create Election Doc
-      final electionRef = FirebaseFirestore.instance.collection('elections').doc();
-      print("Writing election doc to ${electionRef.id}..."); // Debug
-      
-      await electionRef.set({
-        'title': widget.title,
-        'description': widget.description,
-        'startTime': Timestamp.fromDate(widget.start),
-        'endTime': Timestamp.fromDate(widget.end),
-        'isPrivate': widget.isPrivate,
-        'allowOther': allowOther, // New Field
-        'createdBy': user.uid,
-        'creatorName': user.displayName ?? 'Unknown',
-        'status': 'upcoming', 
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      print("Election doc written."); // Debug
-
-      // 3. Add Options Subcollection
-      for (var o in options) {
-         print("Adding option: ${o['title']!.text}"); // Debug
-         await electionRef.collection('candidates').add({ // Keeping collection name 'candidates' for compatibility but using option fields
-           'name': o['title']!.text.trim(), // Mapping Title -> Name
-           'description': o['desc']!.text.trim(),
-           'emailOrId': null, // No longer used
-           'voteCount': 0,
-         });
-      }
-      
-      // If 'Other' is enabled, we don't necessarily add a document for it yet. 
-      // It's usually handled dynamically in the voting screen, or we add a special placeholder doc if needed.
-      // For now, the 'allowOther' flag on the election doc is enough for the UI to show the input.
-
-      print("Options added."); // Debug
+      await electionProvider.createElection(
+        title: widget.title,
+        description: widget.description,
+        start: widget.start,
+        end: widget.end,
+        isPrivate: widget.isPrivate,
+        allowOther: allowOther,
+        imageUrl: widget.imageUrl,
+        options: optionsList,
+      );
 
       if (!mounted) return;
+      
+      // Schedule a notification at the election start time
+      if (widget.start.isAfter(DateTime.now())) {
+        NotificationService().scheduleNotification(
+          id: widget.start.millisecondsSinceEpoch.remainder(100000),
+          title: 'Election Started!',
+          body: 'Voting has begun for "${widget.title}". Cast your vote now!',
+          scheduledDate: widget.start,
+          payload: 'notifications_screen',
+        );
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Election Published Successfully!")));
       
       setState(() => isLoading = false);
       Navigator.popUntil(context, (route) => route.isFirst); 
 
     } catch (e) {
-      print("Error publishing: $e"); // Debug
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
       if (mounted) setState(() => isLoading = false);
     }
